@@ -1,0 +1,76 @@
+--- main.c	2012-04-17 00:17:25.276580100 +0800
++++ main-tom.c	2012-04-17 13:20:46.206627200 +0800
+@@ -90,6 +90,17 @@
+ extern void mdm_init(void); /* defined in board.c */
+ #endif
+ 
++
++
++#define INT *(volatile unsigned int *)
++unsigned int padconf;
++#define GPIO_43         0x4800208c
++#define GPIO2_OE        0x49050034  //spec page 3489
++#define GPIO43          0x00000800  //spec page 3489, 3466
++#define GPIO2_DATAOUT   0x4905003c  //spec page 3490
++
++
++
+ /***************************************************************************
+  * Watch for 'delay' seconds for autoboot stop or autoboot delay string.
+  * returns: 0 -  no key string, allow autoboot
+@@ -214,6 +225,7 @@
+ static __inline__ int abortboot(int bootdelay)
+ {
+ 	int abort = 0;
++	int loop;
+ 
+ #ifdef CONFIG_MENUPROMPT
+ 	printf(CONFIG_MENUPROMPT);
+@@ -221,6 +233,47 @@
+ 	printf("Hit any key to stop autoboot: %2d ", bootdelay);
+ #endif
+ 
++
++
++
++//page 3461, 3489
++//gpio_43 is applied
++//Set the pinmux to GPIO func
++padconf = INT(GPIO_43);
++padconf &= 0xFFFF0000;
++padconf |= 0x00000004;	//mode 4: GPIO
++INT(GPIO_43) = padconf;
++
++//Set the GPIO_OE reg: output direction
++//gpio_[63:34]
++padconf = INT(GPIO2_OE);
++padconf &= ~GPIO43;
++INT(GPIO2_OE) = padconf;
++
++//Set the GPIO_DATAOUT reg: output value
++//gpio_[63:34]
++padconf = INT(GPIO2_DATAOUT);
++
++for(loop=0;loop<3;loop++){
++	padconf |= GPIO43;	//Set gpio_43 high
++	INT(GPIO2_DATAOUT) = padconf;
++	udelay(200000000);  //delay about 2 sec when udelay(200000000)
++
++	padconf &= ~GPIO43;	//Set gpio_43 low
++	INT(GPIO2_DATAOUT) = padconf;
++	udelay(200000000);
++}   
++
++	padconf |= GPIO43;	//Set gpio_43 high
++	INT(GPIO2_DATAOUT) = padconf;
++	udelay(200000000);  
++
++//after this loop, the GPIO_43 turns to be fixed low
++//there should be some initialization in u-boot...
++
++
++
++
+ #if defined CONFIG_ZERO_BOOTDELAY_CHECK
+ 	/*
+ 	 * Check if key already pressed
